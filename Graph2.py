@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 
-# === 常数 ===
 c = 3e10
 a_rad = 7.5657e-15
 gamma = 5.0 / 3.0
@@ -12,13 +11,11 @@ k_B = 1.3807e-16
 m_H = 1.6737e-24
 R_gas = k_B / (mu * m_H)
 
-# 初始条件
-v0 = 5e6  # ⚠️ 更强激波（50 km/s）
+v0 = 5e6
 T0 = 20
 rho0 = 1e-13
 E0 = a_rad * T0**4
 
-# === κ(T) 插值 ===
 T_table = np.array([10, 20, 50, 100, 200, 300, 400, 500, 700, 1000, 2000, 4000])
 kappa_table = np.array([1e-5, 5e-5, 2e-4, 1e-3, 5e-3, 8e-3, 1e-2, 1.2e-2, 1.5e-2, 2e-2, 3e-2, 4e-2])
 opacity_interp = interp1d(T_table, kappa_table, kind='linear', fill_value='extrapolate')
@@ -29,7 +26,6 @@ def opacity(T):
 def flux_limiter(R):
     return 1.0 / (1.0 + R)
 
-# === ODE 右侧 ===
 def radiation_hydro_rhs(x, y, dx, rho, v):
     T = y[0]
     Er = y[1]
@@ -47,7 +43,6 @@ def radiation_hydro_rhs(x, y, dx, rho, v):
     dErdx = G
     return [dTdx, dErdx]
 
-# === RH 跳跃 ===
 def apply_rh_jump(T1, rho1, v1):
     P1 = rho1 * R_gas * T1
     cs1 = np.sqrt(gamma * P1 / rho1)
@@ -60,7 +55,6 @@ def apply_rh_jump(T1, rho1, v1):
     E2 = a_rad * T2**4
     return T2, E2, rho2, v2
 
-# === 模拟区段 ===
 def run_region(T_init, E_init, rho, v, x_start, x_end, N):
     x_vals = np.linspace(x_start, x_end, N)
     dx = x_vals[1] - x_vals[0]
@@ -77,25 +71,16 @@ def run_region(T_init, E_init, rho, v, x_start, x_end, N):
     )
     return sol.t, sol.y
 
-# === 主程序 ===
 def run_shock_simulation():
-    # 区域1
     x1, y1 = run_region(T0, E0, rho0, v0, 0.0, 1e15, 1000)
     T1_end = y1[0, -1]
-
-    # RH跳跃
     T2, E2, rho2, v2 = apply_rh_jump(T1_end, rho0, v0)
-
-    # 区域2
     x2, y2 = run_region(T2, E2, rho2, v2, x1[-1], x1[-1] + 5e14, 300)
-
-    # 合并结果
     x_full = np.concatenate([x1, x2])
     T_full = np.concatenate([y1[0], y2[0]])
     Er_full = np.concatenate([y1[1], y2[1]])
     Trad_full = (Er_full / a_rad)**0.25
 
-    # ==== 可视化温度剖面 ====
     plt.figure(figsize=(8, 5))
     plt.plot(x_full / 1e14, T_full, label='Gas Temperature')
     plt.plot(x_full / 1e14, Trad_full, '--', label='Radiation Temperature')
@@ -109,18 +94,16 @@ def run_shock_simulation():
     plt.tight_layout()
     plt.show()
 
-    # ==== 分析是否有预热区 ====
     delta_T = Trad_full[:len(x1)] - T_full[:len(x1)]
     T_diff_max = np.max(delta_T)
     T_diff_idx = np.argmax(delta_T)
     x_diff_peak = x1[T_diff_idx] / 1e14
 
     if T_diff_max > 5:
-        print(f"✅ 出现预热区：T_rad 高于 T_gas，最大差值 {T_diff_max:.2f}K，位置 x ≈ {x_diff_peak:.2f} ×1e14 cm")
+        print(f"✅ Appearance of preheating zone: T_rad higher than T_gas, maximum difference {T_diff_max:.2f}K, position x ≈ {x_diff_peak:.2f} × 1e14 cm")
     else:
-        print("❌ 未发现明显预热区：T_rad 与 T_gas 几乎同步上升")
+        print("❌ No clear preheating zone was found: T_rad rose almost synchronously with T_gas")
 
-    # ==== 可视化差值图 ====
     plt.figure()
     plt.plot(x1 / 1e14, delta_T)
     plt.xlabel('x (1e14 cm)')
